@@ -1,0 +1,270 @@
+
+from tkinter import filedialog
+from docx import Document
+import heapq
+import math
+from collections import OrderedDict
+
+
+class Hufman(object):
+    def __init__(
+            trenutni,
+            pojava,
+            slovo=None,
+            lijevaGrana=None,
+            desnaGrana=None):
+        trenutni.slovo = slovo
+        trenutni.pojava = pojava
+        trenutni.lijevaGrana = lijevaGrana
+        trenutni.desnaGrana = desnaGrana
+
+    def __gt__(trenutni, drugi):
+        if(trenutni.pojava != drugi.pojava):
+            return trenutni.pojava > drugi.pojava
+
+    def __repr__(trenutni):
+        return "%s(%s)" % (trenutni.slovo, trenutni.pojava)
+
+
+def Izbornik(odabir):
+    if(odabir == "1"):
+        x = 1
+        return x
+    if(odabir == "2"):
+        x = 2
+        return x
+    else:
+        x = 3
+        return x
+
+
+def OtvoriFormu():
+    url = filedialog.askopenfilename()
+    return url
+
+
+def Citaj(url):
+    sadrzaj = " "
+    paragraf = []
+    dokument = Document(url)
+    for x in dokument.paragraphs:
+        paragraf.append(x.text)
+    sadrzaj = sadrzaj.join(paragraf)
+    if(sadrzaj != ''):
+        print(sadrzaj)
+        return sadrzaj
+    else:
+        print("Datoteka je prazna,ucitajte novu")
+        PonoviUcitavanje()
+
+
+def Prebroji(string):
+    slovaPrebrojena = []
+    slova = []
+    i = 0
+    for slovo in string:
+        i = i + 1
+        if slovo not in slovaPrebrojena:
+            brojPojava = string.count(slovo)
+            slovaPrebrojena.append(brojPojava)
+            slova.append(slovo)
+
+    rjecnik = dict(zip(slova, slovaPrebrojena))
+    print(rjecnik)
+    stringlen = i * 8
+    print("Velicina poruke je:", stringlen)
+    return rjecnik, stringlen, i
+
+
+def Shannon(ukupno, rjecnik):
+    x = list((rjecnik.keys()))
+    y = list((rjecnik.values()))
+    x1 = []
+    y1 = []
+    suma = 0
+    x1.append(x)
+    y1.append(y)
+    duljina = (len(x))
+    for i in range(duljina):
+        print("Ocekivan broj bitova za slovo:",
+              x1[0][i], "=", -(math.log2(y1[0][i] / ukupno)), "bitova")
+        suma = suma + (-(y1[0][i] / ukupno) * math.log2(y1[0][i] / ukupno))
+    print("Entropija:", suma, "bitova")
+    return suma
+
+
+def Stablo(rjecnik):
+    cvorovi = []
+    x = []
+    for slovo in rjecnik:
+        cvorovi.append(Hufman(rjecnik[slovo], slovo))
+    i = 1
+
+    while (len(cvorovi) > 1):
+        heapq.heapify(cvorovi)
+        dijete1 = heapq.heappop(cvorovi)
+        dijete2 = heapq.heappop(cvorovi)
+        roditelj = Hufman(
+            dijete1.pojava +
+            dijete2.pojava,
+            dijete1.slovo +
+            dijete2.slovo,
+            lijevaGrana=dijete1,
+            desnaGrana=dijete2)
+        heapq.heappush(cvorovi, roditelj)
+        x = (
+            "Iteracija",
+            i,
+            ": Lijevi cvor:",
+            dijete1,
+            "Desni cvor:",
+            dijete2,
+            "Roditelj/node:",
+            roditelj)
+        print(x)
+        i = i + 1
+    return cvorovi.pop()
+
+
+def StabloUBinarniKod(cvorovi):
+    kod = {}
+
+    def ProlazakKrozStablo(cvor, kodTrenutni=""):
+        while(cvor is not None):
+            if(cvor.lijevaGrana is None):
+                kod[cvor.slovo] = kodTrenutni
+            ProlazakKrozStablo(cvor.lijevaGrana, kodTrenutni + "0")
+            ProlazakKrozStablo(cvor.desnaGrana, kodTrenutni + "1")
+            return
+    ProlazakKrozStablo(cvorovi)
+    print(kod)
+    return kod
+
+
+def Kompresija(string, kod):
+    bitovi = ''.join([kod[slovo]for slovo in string])
+    bitovilen = len(bitovi)
+    print("String u binarnom zapisu: ", bitovi)
+    return bitovi, bitovilen
+
+
+def Usteda(stringlen, bitovilen):
+    usteda = stringlen - bitovilen
+    print(
+        "(Pocetna velicina ",
+        stringlen,
+        "bitova) - (Velicina nakon kompresije",
+        bitovilen,
+        " bitova) = ",
+        usteda,
+        "bitova ustede")
+
+
+def Dekompresija(bitovi, cvorovi):
+    trenutniCvor = cvorovi
+    dekodirano = []
+    for oznaka in bitovi:
+        if (oznaka == "0"):
+            trenutniCvor = trenutniCvor.lijevaGrana
+
+        if(oznaka == "1"):
+            trenutniCvor = trenutniCvor.desnaGrana
+
+        if (trenutniCvor.lijevaGrana is None):
+            dekodirano.append(trenutniCvor.slovo)
+            trenutniCvor = cvorovi
+    dekodirano = ''.join(dekodirano)
+    print("Dekompresiran tekst: ", dekodirano)
+
+
+def Optimalnost(rjecnik, kod, ukupno, entropija):
+    x = OrderedDict(sorted(rjecnik.items(), key=lambda t: t[0]))
+    y = OrderedDict(sorted(kod.items(), key=lambda t: t[0]))
+    x = list(x.values())
+    y = list(y.values())
+    x1 = []
+    y1 = []
+    x1.append(x)
+    y1.append(y)
+    duljina = (len(x))
+    suma = 0
+    for i in range(duljina):
+        suma = suma + ((x1[0][i] / ukupno) * len(y1[0][i]))
+    print("L:", suma, "bitova")
+    if(suma > 0):
+        print("Optimalnost koda je: ", (entropija / suma) * 100, "%")
+
+
+def PonoviUcitavanje():
+    url = OtvoriFormu()
+    string = Citaj(url)
+    rjecnik, stringlen, i = Prebroji(string)
+    suma = Shannon(i, rjecnik)
+    cvorovi = Stablo(rjecnik)
+    kod = StabloUBinarniKod(cvorovi)
+    bitovi, bitovilen = Kompresija(string, kod)
+    Usteda(stringlen, bitovilen)
+    Dekompresija(bitovi, cvorovi)
+    Optimalnost(rjecnik, kod, i, suma)
+    ponovi = True
+    while(ponovi):
+        izlaz = input("IZLAZ DA/NE: ")
+        izlaz = izlaz.lower()
+        if(izlaz == "ne"):
+            ponovi = False
+            Main()
+        if(izlaz == "da"):
+            ponovi = False
+            exit()
+        else:
+            ponovi = True
+
+
+def Main():
+    print("Pozdrav, ovo je program za sazimanje teksta putem hufmanovog kodiranja,zelite li unjeti tekst ručno ili ucitati word? Za rucno unosenje stringa unesite 1 a za ucitavanje worda 2")
+    x = 3
+    while(x > 2 or x < 0):
+        odabir = input("Vas odabir je: ")
+        x = Izbornik(odabir)
+        if(x == 1):
+            greska = True
+            while(greska):
+                string = input("Unesite tekst: ")
+                if(string != ''):
+                    greska = False
+                else:
+                    greska = True
+            rjecnik, stringlen, i = Prebroji(string)
+            suma = Shannon(i, rjecnik)
+            cvorovi = Stablo(rjecnik)
+            kod = StabloUBinarniKod(cvorovi)
+            bitovi, bitovilen = Kompresija(string, kod)
+            Usteda(stringlen, bitovilen)
+            Dekompresija(bitovi, cvorovi)
+            Optimalnost(rjecnik, kod, i, suma)
+        if(x == 2):
+            url = OtvoriFormu()
+            string = Citaj(url)
+            rjecnik, stringlen, i = Prebroji(string)
+            suma = Shannon(i, rjecnik)
+            cvorovi = Stablo(rjecnik)
+            kod = StabloUBinarniKod(cvorovi)
+            bitovi, bitovilen = Kompresija(string, kod)
+            Usteda(stringlen, bitovilen)
+            Dekompresija(bitovi, cvorovi)
+            Optimalnost(rjecnik, kod, i, suma)
+    ponovi = True
+    while(ponovi):
+        izlaz = input("IZLAZ DA/NE: ")
+        izlaz = izlaz.lower()
+        if(izlaz == "ne"):
+            ponovi = False
+            Main()
+        if(izlaz == "da"):
+            ponovi = False
+            exit()
+        else:
+            ponovi = True
+
+
+Main()
